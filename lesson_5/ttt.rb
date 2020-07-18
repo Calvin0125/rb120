@@ -1,6 +1,9 @@
 class Board
-  HUMAN_MARKER = "X"
-  COMPUTER_MARKER = "0"
+  attr_accessor :human_marker, :computer_marker
+
+  @@human_marker = "X"
+  @@computer_marker = "0"
+
   WINNING_LINES = [[1, 2, 3], [4, 5, 6], [7, 8, 9]] +
                   [[1, 4, 7], [2, 5, 8], [3, 6, 9]] +
                   [[1, 5, 9], [3, 5, 7]]
@@ -8,6 +11,22 @@ class Board
   def initialize
     @squares = {}
     reset
+  end
+
+  def self.human_marker
+    @@human_marker
+  end
+
+  def self.human_marker=(marker)
+    @@human_marker = marker
+  end
+
+  def self.computer_marker
+    @@computer_marker
+  end
+
+  def self.computer_marker=(marker)
+    @@computer_marker = marker
   end
 
   # rubocop:disable Metrics/AbcSize
@@ -48,6 +67,39 @@ class Board
     !!winning_marker
   end
 
+  def empty_square(line)
+    empty_square = @squares.select do |k, v|
+      line.include?(k) && v.marker == Square::INITIAL_MARKER
+    end
+    empty_square.keys[0]
+  end
+
+  def computer_defense
+    WINNING_LINES.each do |line|
+      markers = @squares.values_at(*line).map(&:marker)
+      if markers.count(@@human_marker) == 2 &&
+         markers.count(Square::INITIAL_MARKER) == 1
+        return empty_square(line)
+      end
+    end
+    nil
+  end
+
+  def computer_offense
+    WINNING_LINES.each do |line|
+      markers = @squares.values_at(*line).map(&:marker)
+      if markers.count(@@computer_marker) == 2 &&
+         markers.count(Square::INITIAL_MARKER) == 1
+        return empty_square(line)
+      end
+    end
+    nil
+  end
+
+  def middle?
+    @squares[5].marker == Square::INITIAL_MARKER
+  end
+
   def winning_marker
     WINNING_LINES.each do |line|
       markers = @squares.values_at(*line).map(&:marker)
@@ -78,10 +130,11 @@ class Square
 end
 
 class Player
-  attr_reader :marker
+  attr_accessor :marker, :name
 
-  def initialize(marker)
+  def initialize(marker, name = nil)
     @marker = marker
+    @name = name
   end
 end
 
@@ -90,13 +143,21 @@ class TTTGame
 
   attr_reader :board, :human, :computer
 
-  FIRST_TO_MOVE = Board::HUMAN_MARKER
+  FIRST_TO_MOVE = Board.human_marker
 
   def initialize
     @board = Board.new
-    @human = Player.new(Board::HUMAN_MARKER)
-    @computer = Player.new(Board::COMPUTER_MARKER)
+    @human = Player.new(Board.human_marker)
+    @computer = Player.new(Board.computer_marker, %w(R2D2 C3PO Hal).sample)
     @current_marker = FIRST_TO_MOVE
+    @human_score = 0
+    @computer_score = 0
+  end
+
+  def update_score
+    winning_marker = board.winning_marker
+    @computer_score += 1 if winning_marker == computer.marker
+    @human_score += 1 if winning_marker == human.marker
   end
 
   def clear
@@ -114,7 +175,8 @@ class TTTGame
   end
 
   def display_board
-    puts "You're an #{human.marker}. Computer is an #{computer.marker}."
+    puts "#{human.name} is an #{human.marker}. " \
+         "#{computer.name} is an #{computer.marker}."
     puts ""
     board.draw
     puts ""
@@ -122,14 +184,27 @@ class TTTGame
 
   def clear_screen_and_display_board
     clear
-    puts "You're an #{human.marker}. Computer is an #{computer.marker}."
+    puts "#{human.name} is an #{human.marker}. " \
+         "#{computer.name} is an #{computer.marker}."
     puts ""
     board.draw
     puts ""
   end
 
+  def joinor(squares)
+    case squares.length
+    when 1
+      squares[0]
+    when 2
+      "#{squares[0]} or #{squares[1]}"
+    else
+      squares[-1] = "or #{squares.last}"
+      squares.join(', ')
+    end
+  end
+
   def human_moves
-    puts "Choose a square (#{board.unmarked_keys.join(', ')}):"
+    puts "Choose a square (#{joinor(board.unmarked_keys)}):"
     square = 0
     loop do
       square = gets.chomp.to_i
@@ -141,7 +216,15 @@ class TTTGame
   end
 
   def computer_moves
-    square = board.unmarked_keys.sample
+    square = if board.computer_offense
+               board.computer_offense
+             elsif board.computer_defense
+               board.computer_defense
+             elsif board.middle?
+               5
+             else
+               board.unmarked_keys.sample
+             end
     board[square] = computer.marker
   end
 
@@ -202,22 +285,96 @@ class TTTGame
     end
   end
 
+  def display_score
+    puts "#{human.name}: #{@human_score}"
+    puts "#{computer.name}: #{@computer_score}"
+  end
+
+  def choose_marker
+    answer = ''
+    loop do
+      puts "Choose X or O"
+      answer = gets.chomp.upcase
+      break if %w(X O).include?(answer)
+      puts "Sorry, you must input X or O."
+    end
+    answer
+  end
+
+  def update_markers(human_marker)
+    computer_marker = human_marker == 'X' ? 'O' : 'X'
+    Board.human_marker = human_marker
+    human.marker = human_marker
+    Board.computer_marker = computer_marker
+    computer.marker = computer_marker
+  end
+
+  def update_and_display_after_round
+    display_result
+    update_score
+    display_score
+  end
+
   def main_game
     loop do
+      update_markers(choose_marker)
       display_board
       player_move
-      display_result
+      update_and_display_after_round
+      break if @human_score == 5 || @computer_score == 5
       break unless play_again?
       reset
       display_play_again_message
     end
   end
 
+  def display_overall_winner
+    if @computer_score == 5
+      puts "The computer is the overall winner!"
+    elsif @human_score == 5
+      puts "You are the overall winner!"
+    end
+  end
+
+  def reset_game_and_score
+    reset
+    @human_score = 0
+    @computer_score = 0
+  end
+
+  def play_to_five_again?
+    answer = ''
+    loop do
+      puts "Play to five again? (y/n)"
+      answer = gets.chomp.downcase
+      break if %w(y n).include?(answer)
+      puts "Sorry, must input y or n."
+    end
+    answer == 'y'
+  end
+
+  def update_user_name
+    name = ''
+    loop do
+      puts "Please enter your name."
+      name = gets.chomp
+      break unless name == ' '
+    end
+    human.name = name
+  end
+
   public
 
   def play
     display_welcome_message
-    main_game
+    update_user_name
+    loop do
+      main_game
+      display_overall_winner
+      break if @computer_score < 5 && @human_score < 5
+      break unless play_to_five_again?
+      reset_game_and_score
+    end
     display_goodbye_message
   end
 end
