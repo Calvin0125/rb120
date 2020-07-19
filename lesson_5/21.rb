@@ -42,6 +42,8 @@ class Participant
     joinand(stringify_cards(cards))
   end
 
+  private
+
   def stringify_cards(cards)
     cards.map { |card| CARD_STRINGS[card] }
   end
@@ -84,6 +86,12 @@ class Deck
     @cards = create_deck
   end
 
+  def deal
+    cards.pop(2)
+  end
+
+  private
+
   def number_cards
     deck = []
     (2..10).each do |num|
@@ -110,10 +118,6 @@ class Deck
     deck += face_cards
     deck.shuffle
   end
-
-  def deal
-    cards.pop(2)
-  end
 end
 
 class Card
@@ -123,6 +127,8 @@ class Card
     @rank = rank
     @value = card_value
   end
+
+  private
 
   def card_value
     case rank
@@ -137,11 +143,6 @@ class Card
 end
 
 class Game
-  attr_accessor :deck, :player, :dealer
-
-  MAX_VALUE = 21
-  MIN_TO_STAY = 17
-
   def initialize
     @deck = Deck.new
     @player = Player.new(deck)
@@ -159,6 +160,13 @@ class Game
     end
     display_goodbye_message
   end
+
+  private
+
+  attr_accessor :deck, :player, :dealer
+
+  MAX_VALUE = 21
+  MIN_TO_STAY = 17
 
   def reset
     deck.reset
